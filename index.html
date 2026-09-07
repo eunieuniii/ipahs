@@ -888,59 +888,44 @@ let reviews = [];
 async function loadSupabaseData() {
     try {
         const { data: eventData, error: eventError } = await supabase
-            .from('exam_events')
-            .select('*')
-            .order('start_date', { ascending: true });
-
-        if (!eventError && eventData) {
+            .from('exam_events').select('*').order('start_date', { ascending: true });
+        if (!eventError && eventData && eventData.length) {
             examEvents = eventData.map(ev => ({
-                id: ev.id,
-                title: ev.title,
-                startDate: ev.start_date,
-                endDate: ev.end_date,
-                type: ev.type
+                id: ev.id, title: ev.title, startDate: ev.start_date,
+                endDate: ev.end_date, type: ev.type
             }));
         }
 
         const { data: reviewData, error: reviewError } = await supabase
-            .from('reviews')
-            .select('*')
-            .eq('approved', true)
-            .order('created_at', { ascending: false });
-
+            .from('reviews').select('*').order('created_at', { ascending: false });
         if (!reviewError && reviewData) {
             reviews = reviewData.map(r => ({
-                id: r.id,
-                class: r.class,
-                number: r.number,
-                author: r.author,
-                major: r.major,
-                type: r.type,
-                univ: r.university,
-                content: r.content,
-                approved: r.approved,
-                date: r.date
+                id: r.id, class: r.class, number: r.number, author: r.author,
+                major: r.major, type: r.type, univ: r.university,
+                content: r.content, approved: r.approved, date: r.date
             }));
         }
 
         const { data: noticeData, error: noticeError } = await supabase
-            .from('notices')
-            .select('*')
-            .order('date', { ascending: false });
-
-        if (!noticeError && noticeData && noticeData.length > 0) {
+            .from('notices').select('*').order('date', { ascending: false });
+        if (!noticeError && noticeData && noticeData.length) {
             notices = noticeData.map(n => ({
-                id: n.id,
-                title: n.title,
-                content: n.content,
-                date: n.date,
-                isImportant: n.is_important,
-                isHTML: n.is_html
+                id: n.id, title: n.title, content: n.content, date: n.date,
+                isImportant: n.is_important, isHTML: n.is_html
+            }));
+        }
+
+        const { data: trackerDataFromDb, error: trackerError } = await supabase
+            .from('student_tracker').select('*').order('created_at', { ascending: false });
+        if (!trackerError && trackerDataFromDb) {
+            trackerData = trackerDataFromDb.map(t => ({
+                id: t.id, class: t.class, num: t.num, name: t.name,
+                major: t.major, type: t.type, univ: t.university,
+                date: t.date, status: t.status
             }));
         }
 
         console.log('Supabase 데이터 로드 완료');
-
     } catch (error) {
         console.error('Supabase 데이터 로드 오류:', error);
     }
@@ -996,7 +981,7 @@ async function loadSupabaseData() {
             <p class="text-[11px] text-slate-500 mt-2">※ 정확한 세부 실기 시간은 대학별 고사장 발표 안내에 따라 본인 실기일을 '학생 지원 현황'에서 업데이트 해주시기 바랍니다.</p>
         `;
 
-        let notices = JSON.parse(localStorage.getItem('ipahs_notices')) || [
+        let notices = [
             {
                 id: 1,
                 title: '🎓 2027학년도 주요 대학별 수시 원서접수 및 실기 일정 안내',
@@ -1363,51 +1348,47 @@ async function initApp() {
             const title = document.getElementById('notice-title-input').value.trim();
             const content = document.getElementById('notice-content-input').value.trim();
             const isImportant = document.getElementById('notice-important-check').checked;
-
             if (!title || !content) return;
 
+            let error;
             if (editId) {
-                const index = notices.findIndex(n => String(n.id) === String(editId));
-                if (index !== -1) {
-                    notices[index].title = title;
-                    if (!notices[index].isHTML) {
-                        notices[index].content = content;
-                    }
-                    notices[index].isImportant = isImportant;
-                    showToast("공지사항이 성공적으로 수정되었습니다!");
+                const current = notices.find(n => String(n.id) === String(editId));
+                if (!current) return;
+                const result = await supabase.from('notices').update({
+                    title, content: current.isHTML ? current.content : content,
+                    is_important: isImportant
+                }).eq('id', Number(editId));
+                error = result.error;
+                if (!error) {
+                    current.title = title;
+                    if (!current.isHTML) current.content = content;
+                    current.isImportant = isImportant;
                 }
             } else {
-                const newNotice = {
-                    id: Date.now(),
-                    title: title,
-                    content: content,
+                const result = await supabase.from('notices').insert([{
+                    title, content,
                     date: new Date().toISOString().split('T')[0],
-                    isImportant: isImportant,
-                    isHTML: false
-                };
-                notices.unshift(newNotice);
-                showToast("새 공지사항이 성공적으로 등록되었습니다!");
+                    is_important: isImportant,
+                    is_html: false
+                }]).select().single();
+                error = result.error;
+                if (!error && result.data) {
+                    notices.unshift({
+                        id: result.data.id, title: result.data.title, content: result.data.content,
+                        date: result.data.date, isImportant: result.data.is_important, isHTML: result.data.is_html
+                    });
+                }
             }
 
-            const { error } = await supabase
-    .from('notices')
-    .insert([{
-        title: newNotice.title,
-        content: newNotice.content,
-        date: newNotice.date,
-        is_important: newNotice.isImportant,
-        is_html: newNotice.isHTML
-    }]);
-
-if (error) {
-    console.error('공지 저장 오류:', error);
-    showToast("공지 저장에 실패했습니다.", "warning");
-    return;
-}
-
+            if (error) {
+                console.error('공지 저장 오류:', error);
+                showToast('공지 저장에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
+                return;
+            }
             closeNoticeCreateModal();
             renderNotices();
             renderAdminPanel();
+            showToast(editId ? '공지사항이 성공적으로 수정되었습니다!' : '새 공지사항이 성공적으로 등록되었습니다!');
         }
 
         function toggleUnivDirectInput(selectEl) {
@@ -1514,7 +1495,7 @@ reviews.unshift({
             document.getElementById('add-event-modal').classList.add('hidden');
         }
 
-        function handleEventSubmit(e) {
+        async function handleEventSubmit(e) {
             e.preventDefault();
             if (!isAdminLoggedIn) return;
 
@@ -1523,49 +1504,37 @@ reviews.unshift({
             const startDate = document.getElementById('event-start-date').value;
             const endDate = document.getElementById('event-end-date').value;
             const type = document.getElementById('event-type-select').value;
-
             if (!title || !startDate || !endDate) return;
 
+            let error;
             if (editId) {
-                const idx = examEvents.findIndex(ev => String(ev.id) === String(editId));
-                if (idx !== -1) {
-                    examEvents[idx].title = title;
-                    examEvents[idx].startDate = startDate;
-                    examEvents[idx].endDate = endDate;
-                    examEvents[idx].type = type;
-                    showToast("입시 일정이 수정되었습니다!");
+                const result = await supabase.from('exam_events').update({
+                    title, start_date: startDate, end_date: endDate, type
+                }).eq('id', String(editId));
+                error = result.error;
+                if (!error) {
+                    const idx = examEvents.findIndex(ev => String(ev.id) === String(editId));
+                    if (idx !== -1) examEvents[idx] = { ...examEvents[idx], title, startDate, endDate, type };
                 }
             } else {
-                const newEv = {
-                    id: 'ev_' + Date.now(),
-                    title: title,
-                    startDate: startDate,
-                    endDate: endDate,
-                    type: type
-                };
-                examEvents.push(newEv);
-                showToast("새 입시 일정이 등록되었습니다!");
+                const newEv = { id: 'ev_' + Date.now(), title, startDate, endDate, type };
+                const result = await supabase.from('exam_events').insert([{
+                    id: newEv.id, title, start_date: startDate, end_date: endDate, type
+                }]);
+                error = result.error;
+                if (!error) examEvents.push(newEv);
             }
 
-         const { error } = await supabase
-    .from('exam_events')
-    .insert([{
-        id: String(newEv.id),
-        title: newEv.title,
-        start_date: newEv.startDate,
-        end_date: newEv.endDate,
-        type: newEv.type
-    }]);
-
-if (error) {
-    console.error('일정 저장 오류:', error);
-    showToast("일정 저장에 실패했습니다.", "warning");
-    return;
-}
+            if (error) {
+                console.error('일정 저장 오류:', error);
+                showToast('일정 저장에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
+                return;
+            }
             closeAddEventModal();
             renderCalendar();
             renderAdminPanel();
             selectCalendarDay(startDate);
+            showToast(editId ? '입시 일정이 수정되었습니다!' : '새 입시 일정이 등록되었습니다!');
         }
 
         function editExamEvent(id) {
@@ -1892,50 +1861,47 @@ trackerData.unshift(newItem);
             }
         }
 
-        function approveReview(id) {
-            const rev = reviews.find(r => r.id === id);
-            if (rev) {
-                rev.approved = true;
-                localStorage.setItem('ipahs_reviews', JSON.stringify(reviews));
-                renderReviews();
-                renderAdminPanel();
-                showToast("실기 후기가 승인되어 게시판에 공개되었습니다!");
+        async function approveReview(id) {
+            if (!isAdminLoggedIn) return;
+            const { error } = await supabase.from('reviews').update({ approved: true }).eq('id', Number(id));
+            if (error) {
+                console.error('후기 승인 오류:', error);
+                showToast('후기 승인에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
+                return;
             }
-        }
-
-        function rejectReview(id) {
-            reviews = reviews.filter(r => r.id !== id);
-            localStorage.setItem('ipahs_reviews', JSON.stringify(reviews));
+            const rev = reviews.find(r => r.id === id);
+            if (rev) rev.approved = true;
             renderReviews();
             renderAdminPanel();
-            showToast("후기가 반려 및 삭제되었습니다.");
+            showToast('실기 후기가 승인되어 게시판에 공개되었습니다!');
+        }
+
+        async function rejectReview(id) {
+            if (!isAdminLoggedIn) return;
+            const { error } = await supabase.from('reviews').delete().eq('id', Number(id));
+            if (error) {
+                console.error('후기 삭제 오류:', error);
+                showToast('후기 삭제에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
+                return;
+            }
+            reviews = reviews.filter(r => r.id !== id);
+            renderReviews();
+            renderAdminPanel();
+            showToast('후기가 반려 및 삭제되었습니다.');
         }
 
  async function deleteNotice(id) {
-    if (!isAdminLoggedIn) return;
-
-    const { error } = await supabase
-        .from('notices')
-        .delete()
-        .eq('id', Number(id));
-
-    if (error) {
-        console.error('공지사항 삭제 오류:', error);
-        showToast("공지사항 삭제에 실패했습니다.", "warning");
-        return;
-    }
-
-    notices = notices.filter(n => n.id != id);
-
-    renderNotices();
-    renderAdminPanel();
-    showToast("공지사항이 삭제되었습니다.");
-}
-
-await loadSupabaseData();
+            if (!isAdminLoggedIn) return;
+            const { error } = await supabase.from('notices').delete().eq('id', Number(id));
+            if (error) {
+                console.error('공지사항 삭제 오류:', error);
+                showToast('공지사항 삭제에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
+                return;
+            }
+            notices = notices.filter(n => Number(n.id) !== Number(id));
             renderNotices();
             renderAdminPanel();
-            showToast("공지사항이 삭제되었습니다.");
+            showToast('공지사항이 삭제되었습니다.');
         }
 
         function toggleAdminModal() {
