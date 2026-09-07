@@ -1365,7 +1365,9 @@ async function initApp() {
                     current.isImportant = isImportant;
                 }
             } else {
+                const newNoticeId = Date.now();
                 const result = await supabase.from('notices').insert([{
+                    id: newNoticeId,
                     title, content,
                     date: new Date().toISOString().split('T')[0],
                     is_important: isImportant,
@@ -1464,8 +1466,9 @@ reviews.unshift({
 });
 
             document.getElementById('review-content').value = '';
-            showToast("후기가 제출되었습니다. 선생님 승인 후 게시판에 등록됩니다!");
+            renderReviews();
             renderAdminPanel();
+            showToast("후기가 제출되었습니다. 선생님 승인 후 게시판에 등록됩니다!");
         }
 
         function openAddTrackerModal() {
