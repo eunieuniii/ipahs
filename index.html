@@ -10,7 +10,7 @@
     <script>
 const SUPABASE_URL = 'https://mvfpuuntlxufuadxmfvd.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_YIOZj3XFtrzLS-bSl_65dQ_tLHC2zzq';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 </script>
     <!-- FontAwesome Icons CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -887,7 +887,7 @@ let reviews = [];
 // Supabase에서 데이터 불러오기
 async function loadSupabaseData() {
     try {
-        const { data: eventData, error: eventError } = await supabase
+        const { data: eventData, error: eventError } = await supabaseClient
             .from('ipahs_events').select('*').order('start_date', { ascending: true });
         if (!eventError && eventData && eventData.length) {
             examEvents = eventData.map(ev => ({
@@ -896,7 +896,7 @@ async function loadSupabaseData() {
             }));
         }
 
-        const { data: reviewData, error: reviewError } = await supabase
+        const { data: reviewData, error: reviewError } = await supabaseClient
             .from('ipahs_reviews').select('*').order('date', { ascending: false });
         if (!reviewError && reviewData) {
             reviews = reviewData.map(r => ({
@@ -906,7 +906,7 @@ async function loadSupabaseData() {
             }));
         }
 
-        const { data: noticeData, error: noticeError } = await supabase
+        const { data: noticeData, error: noticeError } = await supabaseClient
             .from('ipahs_notices').select('*').order('date', { ascending: false });
         if (!noticeError && noticeData && noticeData.length) {
             notices = noticeData.map(n => ({
@@ -915,7 +915,7 @@ async function loadSupabaseData() {
             }));
         }
 
-        const { data: trackerDataFromDb, error: trackerError } = await supabase
+        const { data: trackerDataFromDb, error: trackerError } = await supabaseClient
             .from('ipahs_tracker').select('*').order('date', { ascending: false });
         if (!trackerError && trackerDataFromDb) {
             trackerData = trackerDataFromDb.map(t => ({
@@ -1354,7 +1354,7 @@ async function initApp() {
             if (editId) {
                 const current = notices.find(n => String(n.id) === String(editId));
                 if (!current) return;
-                const result = await supabase.from('ipahs_notices').update({
+                const result = await supabaseClient.from('ipahs_notices').update({
                     title, content: current.isHTML ? current.content : content,
                     is_important: isImportant
                 }).eq('id', Number(editId));
@@ -1366,7 +1366,7 @@ async function initApp() {
                 }
             } else {
                 const newNoticeId = Date.now();
-                const result = await supabase.from('ipahs_notices').insert([{
+                const result = await supabaseClient.from('ipahs_notices').insert([{
                     id: newNoticeId,
                     title, content,
                     date: new Date().toISOString().split('T')[0],
@@ -1429,7 +1429,7 @@ async function initApp() {
                 date: new Date().toISOString().split('T')[0]
             };
 
-const { data, error } = await supabase
+const { data, error } = await supabaseClient
     .from('ipahs_reviews')
     .insert([{
         id: newReview.id,
@@ -1511,7 +1511,7 @@ reviews.unshift({
 
             let error;
             if (editId) {
-                const result = await supabase.from('ipahs_events').update({
+                const result = await supabaseClient.from('ipahs_events').update({
                     title, start_date: startDate, end_date: endDate, type
                 }).eq('id', String(editId));
                 error = result.error;
@@ -1521,7 +1521,7 @@ reviews.unshift({
                 }
             } else {
                 const newEv = { id: 'ev_' + Date.now(), title, startDate, endDate, type };
-                const result = await supabase.from('ipahs_events').insert([{
+                const result = await supabaseClient.from('ipahs_events').insert([{
                     id: newEv.id, title, start_date: startDate, end_date: endDate, type_val: type
                 }]);
                 error = result.error;
@@ -1566,7 +1566,7 @@ reviews.unshift({
 async function deleteExamEventDirect(id) {
     if (!isAdminLoggedIn) return;
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
         .from('ipahs_events')
         .delete()
         .eq('id', String(id));
@@ -1586,7 +1586,7 @@ async function deleteExamEventDirect(id) {
 async function deleteTrackerItem(id) {
     if (!isAdminLoggedIn) return;
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
         .from('ipahs_tracker')
         .delete()
         .eq('id', id);
@@ -1683,7 +1683,7 @@ async function handleAddTrackerSubmit(e) {
                 status: document.getElementById('track-status').value
             };
 
-const { error } = await supabase
+const { error } = await supabaseClient
     .from('ipahs_tracker')
     .insert([{
         id: newItem.id,
@@ -1866,7 +1866,7 @@ trackerData.unshift(newItem);
 
         async function approveReview(id) {
             if (!isAdminLoggedIn) return;
-            const { error } = await supabase.from('ipahs_reviews').update({ approved: true }).eq('id', Number(id));
+            const { error } = await supabaseClient.from('ipahs_reviews').update({ approved: true }).eq('id', Number(id));
             if (error) {
                 console.error('후기 승인 오류:', error);
                 showToast('후기 승인에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
@@ -1881,7 +1881,7 @@ trackerData.unshift(newItem);
 
         async function rejectReview(id) {
             if (!isAdminLoggedIn) return;
-            const { error } = await supabase.from('ipahs_reviews').delete().eq('id', Number(id));
+            const { error } = await supabaseClient.from('ipahs_reviews').delete().eq('id', Number(id));
             if (error) {
                 console.error('후기 삭제 오류:', error);
                 showToast('후기 삭제에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
@@ -1895,7 +1895,7 @@ trackerData.unshift(newItem);
 
  async function deleteNotice(id) {
             if (!isAdminLoggedIn) return;
-            const { error } = await supabase.from('ipahs_notices').delete().eq('id', Number(id));
+            const { error } = await supabaseClient.from('ipahs_notices').delete().eq('id', Number(id));
             if (error) {
                 console.error('공지사항 삭제 오류:', error);
                 showToast('공지사항 삭제에 실패했습니다. 교사 인증 상태를 확인해 주세요.', 'warning');
@@ -1995,4 +1995,3 @@ trackerData.unshift(newItem);
     </script>
 </body>
 </html>
-
