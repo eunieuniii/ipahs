@@ -919,8 +919,8 @@ async function loadSupabaseData() {
             .from('student_tracker').select('*').order('date', { ascending: false });
         if (!trackerError && trackerDataFromDb) {
             trackerData = trackerDataFromDb.map(t => ({
-                id: t.id, class: t.class_num, num: t.num, name: t.name,
-                major: t.major, type: t.type_val, univ: t.univ,
+                id: t.id, class: t.class, num: t.num, name: t.name,
+                major: t.major, type: t.type, univ: t.university,
                 date: t.date, status: t.status
             }));
         }
@@ -1691,8 +1691,8 @@ const { error } = await supabaseClient
         num: Number(newItem.num),
         name: newItem.name,
         major: newItem.major,
-        type_val: newItem.type,
-        univ: newItem.univ,
+        type: newItem.type,
+        university: newItem.univ,
         date: newItem.date,
         status: newItem.status
     }]);
