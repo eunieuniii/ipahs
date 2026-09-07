@@ -876,13 +876,75 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE
             { id: 'ev_25', title: '한양대 ERICA 원서접수', startDate: '2026-09-08', endDate: '2026-09-11', type: '원서' }
         ];
 
-        let examEvents = JSON.parse(localStorage.getItem('ipahs_exam_events')) || defaultExamEvents;
+       let examEvents = defaultExamEvents;
 
-        // Student Application Tracker Data
-        let trackerData = JSON.parse(localStorage.getItem('ipahs_tracker')) || [];
+// Student Application Tracker Data
+let trackerData = [];
 
-        // Student Practical Reviews Data
-        let reviews = JSON.parse(localStorage.getItem('ipahs_reviews')) || [];
+// Student Practical Reviews Data
+let reviews = [];
+
+// Supabase에서 데이터 불러오기
+async function loadSupabaseData() {
+    try {
+        const { data: eventData, error: eventError } = await supabase
+            .from('exam_events')
+            .select('*')
+            .order('start_date', { ascending: true });
+
+        if (!eventError && eventData) {
+            examEvents = eventData.map(ev => ({
+                id: ev.id,
+                title: ev.title,
+                startDate: ev.start_date,
+                endDate: ev.end_date,
+                type: ev.type
+            }));
+        }
+
+        const { data: reviewData, error: reviewError } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('approved', true)
+            .order('created_at', { ascending: false });
+
+        if (!reviewError && reviewData) {
+            reviews = reviewData.map(r => ({
+                id: r.id,
+                class: r.class,
+                number: r.number,
+                author: r.author,
+                major: r.major,
+                type: r.type,
+                univ: r.university,
+                content: r.content,
+                approved: r.approved,
+                date: r.date
+            }));
+        }
+
+        const { data: noticeData, error: noticeError } = await supabase
+            .from('notices')
+            .select('*')
+            .order('date', { ascending: false });
+
+        if (!noticeError && noticeData && noticeData.length > 0) {
+            notices = noticeData.map(n => ({
+                id: n.id,
+                title: n.title,
+                content: n.content,
+                date: n.date,
+                isImportant: n.is_important,
+                isHTML: n.is_html
+            }));
+        }
+
+        console.log('Supabase 데이터 로드 완료');
+
+    } catch (error) {
+        console.error('Supabase 데이터 로드 오류:', error);
+    }
+}
 
         // Detailed University Schedule Table HTML Notice
         const scheduleTableNoticeHTML = `
@@ -953,15 +1015,17 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE
             }
         ];
 
-        function initApp() {
-            renderNotices();
-            renderCalendar();
-            renderReviews();
-            renderTrackerTable();
-            renderAdminPanel();
+async function initApp() {
+    await loadSupabaseData();
 
-            selectCalendarDay('2026-09-07');
-        }
+    renderNotices();
+    renderCalendar();
+    renderReviews();
+    renderTrackerTable();
+    renderAdminPanel();
+
+    selectCalendarDay('2026-09-07');
+}
 
         // CSV Export Helper Functions for Teachers
         function exportTrackerToCSV() {
@@ -1338,7 +1402,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE
             else container.classList.add('hidden');
         }
 
-        function handleReviewSubmit(e) {
+      async function handleReviewSubmit(e) {
             e.preventDefault();
             const classVal = document.getElementById('review-class').value;
             const numVal = document.getElementById('review-number').value;
@@ -1368,8 +1432,41 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE
                 date: new Date().toISOString().split('T')[0]
             };
 
-            reviews.unshift(newReview);
-            localStorage.setItem('ipahs_reviews', JSON.stringify(reviews));
+const { data, error } = await supabase
+    .from('reviews')
+    .insert([{
+        id: newReview.id,
+        class: newReview.class,
+        number: Number(newReview.number),
+        author: newReview.author,
+        major: newReview.major,
+        type: newReview.type,
+        university: newReview.univ,
+        content: newReview.content,
+        approved: false,
+        date: newReview.date
+    }])
+    .select()
+    .single();
+
+if (error) {
+    console.error('후기 저장 오류:', error);
+    showToast("후기 저장에 실패했습니다.", "warning");
+    return;
+}
+
+reviews.unshift({
+    id: data.id,
+    class: data.class,
+    number: data.number,
+    author: data.author,
+    major: data.major,
+    type: data.type,
+    univ: data.university,
+    content: data.content,
+    approved: data.approved,
+    date: data.date
+});
 
             document.getElementById('review-content').value = '';
             showToast("후기가 제출되었습니다. 선생님 승인 후 게시판에 등록됩니다!");
